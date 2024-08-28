@@ -104,21 +104,23 @@
 # # Default command to run when the container starts
 # CMD ["bash"]
 
-#############################################
+######################bisaikiojokdiahpusuncoment ae ya####################################
+# Base image
+# Gunakan Ubuntu sebagai base image
 # FROM ubuntu:latest
 
-# # Set non-interactive to avoid prompts during package installation
+# # Set non-interactive untuk menghindari prompt selama instalasi paket
 # ENV DEBIAN_FRONTEND=noninteractive
 
-# # Use a faster mirror (optional, adjust to your region)
+# # Gunakan mirror yang lebih cepat (opsional, sesuaikan dengan wilayah Anda)
 # RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://mirror.speedpartner.de/ubuntu/|g' /etc/apt/sources.list
 
-# # Update package sources and upgrade the system
+# # Update dan upgrade sistem
 # RUN apt-get update -y && \
 #     apt-get upgrade -y && \
 #     apt-get dist-upgrade -y
 
-# # Install essential dependencies
+# # Install dependencies penting
 # RUN apt-get install -y \
 #     git \
 #     wget \
@@ -144,11 +146,13 @@
 #     pkg-config \
 #     liblz4-tool \
 #     libgtk-3-dev \
+#     rsync \
+#     xdg-user-dirs \
 #     qemu-user-static && \
 #     apt-get clean && \
 #     rm -rf /var/lib/apt/lists/*
 
-# # Set the timezone
+# # Set timezone
 # ENV TZ=Europe/Rome
 # RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
@@ -157,9 +161,10 @@
 
 # # Set Flutter environment variables
 # ENV PATH="/usr/local/flutter/bin:/usr/local/flutter/bin/cache/dart-sdk/bin:${PATH}"
+# # Set the CXX environment variable to g++
 # ENV CXX=g++
 
-# # Create a non-root user and switch to that user
+# # Create non-root user dan switch ke user tersebut
 # RUN useradd -ms /bin/bash flutteruser
 
 # # Change ownership of the Flutter directory
@@ -168,9 +173,6 @@
 # # Switch to the non-root user
 # USER flutteruser
 # WORKDIR /home/flutteruser
-
-# # Run flutter doctor to verify the setup
-# RUN flutter doctor -v
 
 # # Pre-download Flutter dependencies
 # RUN flutter precache 
@@ -197,33 +199,34 @@
 # WORKDIR /home/flutteruser/gallery
 # RUN flutter pub get
 
-# # Build the Flutter Gallery project
+# # Update dependencies
+# RUN flutter pub upgrade && \
+#     dart pub upgrade && \
+#     flutter pub get
+
+# # Build the Flutter project (Linux build for local debugging)
 # RUN flutter build linux
 
 # # Expose the necessary port (if your Flutter app serves on a port)
 # EXPOSE 8080
 
 # # Default command to run when the container starts
-# CMD ["flutter", "run", "-d", "linux"]
+# CMD ["flutter", "run", "--profile", "--no-sound-null-safety" "--verbose"]
 
-###############################################################
-# Base image
-# Gunakan Ubuntu sebagai base image
+#######################################################################################
+# Use Ubuntu as the base image
 FROM ubuntu:latest
 
-# Set non-interactive untuk menghindari prompt selama instalasi paket
+# Set non-interactive mode for package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Gunakan mirror yang lebih cepat (opsional, sesuaikan dengan wilayah Anda)
-RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://mirror.speedpartner.de/ubuntu/|g' /etc/apt/sources.list
+# Use a faster mirror (optional, adjust to your region)
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://mirror.speedpartner.de/ubuntu/|g' /etc/apt/sources.list || true
 
-# Update dan upgrade sistem
+# Update and install necessary packages
 RUN apt-get update -y && \
     apt-get upgrade -y && \
-    apt-get dist-upgrade -y
-
-# Install dependencies penting
-RUN apt-get install -y \
+    apt-get install -y \
     git \
     wget \
     curl \
@@ -248,6 +251,8 @@ RUN apt-get install -y \
     pkg-config \
     liblz4-tool \
     libgtk-3-dev \
+    x11-apps \
+    libx11-dev \
     rsync \
     xdg-user-dirs \
     qemu-user-static && \
@@ -262,22 +267,16 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN git clone https://github.com/flutter/flutter.git -b stable --depth 1 /usr/local/flutter
 
 # Set Flutter environment variables
-ENV PATH="/usr/local/flutter/bin:/usr/local/flutter/bin/cache/dart-sdk/bin:${PATH}"
-# Set the CXX environment variable to g++
-ENV CXX=g++
+ENV PATH="/usr/local/flutter/bin:${PATH}"
 
-# Create non-root user dan switch ke user tersebut
+# Pre-cache dependencies for Flutter
+RUN flutter precache --linux --no-android --no-ios --no-web
+
+# Create non-root user and switch to it
 RUN useradd -ms /bin/bash flutteruser
-
-# Change ownership of the Flutter directory
 RUN chown -R flutteruser:flutteruser /usr/local/flutter
-
-# Switch to the non-root user
 USER flutteruser
 WORKDIR /home/flutteruser
-
-# Pre-download Flutter dependencies
-RUN flutter precache 
 
 # Clone flutter-pi repository
 RUN git clone https://github.com/ardera/flutter-pi.git /home/flutteruser/flutter-pi
@@ -288,30 +287,21 @@ RUN mkdir build && cd build && cmake .. && make -j$(nproc)
 
 # Clone the Flutter Gallery repository
 WORKDIR /home/flutteruser
-RUN git clone https://github.com/flutter/gallery.git /home/flutteruser/gallery
+RUN git clone --depth 1 https://github.com/flutter/gallery.git /home/flutteruser/gallery
 
-# Change ownership of the cloned repository
-USER root
-RUN chown -R flutteruser:flutteruser /home/flutteruser/gallery
-
-# Switch back to non-root user
-USER flutteruser
-
-# Navigate to the gallery directory and install dependencies
+# Install dependencies and build Flutter Gallery
 WORKDIR /home/flutteruser/gallery
-RUN flutter pub get
-
-# Update dependencies
-RUN flutter pub upgrade && \
+RUN flutter pub get && \
+    flutter pub upgrade && \
     dart pub upgrade && \
-    flutter pub get
-
-# Build the Flutter project (Linux build for local debugging)
-RUN flutter build linux
+    flutter clean && \
+    flutter pub get && \
+    flutter build linux
 
 # Expose the necessary port (if your Flutter app serves on a port)
 EXPOSE 8080
 
 # Default command to run when the container starts
-CMD ["flutter", "run", "--profile", "--no-sound-null-safety"]
+CMD ["flutter", "run", "--release", "--no-sound-null-safety", "--verbose"]
+
 
